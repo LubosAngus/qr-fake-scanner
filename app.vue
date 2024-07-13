@@ -1,44 +1,109 @@
 <script setup lang="ts">
-import {Html5QrcodeScanner} from "html5-qrcode";
+import { Html5Qrcode } from "html5-qrcode";
 
-const showOverlay = ref(true)
+const showError = ref(false)
+const showOverlay = ref(false)
 const scannedValue = ref('')
 
 function closeOverlay() {
   showOverlay.value = false
+
+  startScanning()
+}
+
+function closeError() {
+  showError.value = false
+
+  startScanning()
 }
 
 function onScanSuccess(decodedText: any, decodedResult: any) {
+  let savedTickets;
+
+  try {
+    savedTickets = JSON.parse(localStorage.getItem('tickets') || '[]')
+  } catch (error) {
+    savedTickets = []
+  }
+
+  if (savedTickets.includes(decodedText)) {
+    new Audio('/erro.mp3').play()
+
+    showError.value = true
+    return
+  }
+
   // alert(`Code matched = ${decodedText}`, decodedResult);
   new Audio('/tada.mp3').play()
 
   showOverlay.value = true
   scannedValue.value = decodedText
-}
 
-function onScanFailure(error: any) {
-  console.error(`Code scan error = ${error}`);
+  savedTickets.push(decodedText)
+
+  localStorage.setItem('tickets', JSON.stringify(savedTickets))
 }
 
 onMounted(() => {
-  let html5QrcodeScanner = new Html5QrcodeScanner(
-    "reader",
-    {
-      fps: 1,
-      qrbox: {
-        width: 250,
-        height: 250
-      }
-    },
-    /* verbose= */ true);
-
-  html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+  startScanning()
 })
+
+async function startScanning() {
+  Html5Qrcode.getCameras().then(devices => {
+    /**
+     * devices would be an array of objects of type:
+     * { id: "id", label: "label" }
+     */
+    if (!devices || !devices.length) {
+      return
+    }
+
+    var cameraId
+    try {
+      cameraId = devices[1].id;
+    } catch (error) {
+      cameraId = devices[0].id;
+    }
+
+    const html5QrCode = new Html5Qrcode(/* element id */ "reader");
+    html5QrCode.start(
+      cameraId,
+      {
+        fps: 15,    // Optional, frame per seconds for qr code scanning
+        qrbox: {
+          width: 120,
+          height: 120
+        }  // Optional, if you want bounded box UI
+      },
+      (decodedText, decodedResult) => {
+        // do something when code is read
+        onScanSuccess(decodedText, decodedResult);
+
+        html5QrCode.stop().then(ignore => {
+          // QR Code scanning is stopped.
+        }).catch(err => {
+          // Stop failed, handle it.
+        });
+      },
+      (errorMessage) => {});
+  });
+}
 </script>
 
 <template>
   <div>
-    <div id="reader" width="600px"></div>
+    <span class="loader"></span>
+
+    <div class="interface">
+      <div id="reader" width="600px"></div>
+    </div>
+
+    <div class="overlay error" v-if="showError">
+      <pre>Tota paska už bola naskenovaná!</pre>
+
+      <button @click="closeError">haha</button>
+    </div>
+
     <div class="overlay" v-if="showOverlay">
       <div class="success-checkmark">
         <div class="check-icon">
@@ -56,13 +121,78 @@ onMounted(() => {
   </div>
 </template>
 
-<style scoped>
+<style>
 @keyframes fadeIn {
   from {
     opacity: 0;
   }
   to {
     opacity: 1;
+  }
+}
+
+.loader {
+  z-index: 1;
+  position: fixed;
+  top: calc(50% - 32px);
+  left: calc(50% - 32px);
+  width: 64px;
+  height: 64px;
+  border: 5px solid #FFF;
+  border-left-color: transparent;
+  border-bottom-color: transparent;
+  border-radius: 50%;
+  display: inline-block;
+  box-sizing: border-box;
+  animation: rotation .5s linear infinite;
+}
+
+    @keyframes rotation {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+    }
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  background-color: black;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+
+.interface {
+  position: fixed;
+  width: 100%;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 30px;
+  padding: 30px;
+  z-index: 2;
+
+  #reader {
+    width: 100%;
+    flex: 0 0 auto;
+  }
+
+  button {
+    width: 100%;
+    height: 70px;
+    background-color: black;
+    color: white;
+    border: none;
+    font-size: 20px;
+    font-weight: 700;
   }
 }
 
@@ -78,6 +208,10 @@ onMounted(() => {
   opacity: 0;
   animation: fadeIn 0.25s ease forwards;
   background-color: var(--color-green);
+
+  &.error {
+    --color-green: #c81616;
+  }
 
   display: flex;
   flex-direction: column;
