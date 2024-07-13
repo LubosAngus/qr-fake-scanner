@@ -99,7 +99,7 @@ async function startScanning() {
     </div>
 
     <div class="overlay error" v-if="showError">
-      <pre>Tota paska už bola naskenovaná!</pre>
+      <pre>!!!</pre>
 
       <button @click="closeError">haha</button>
     </div>
